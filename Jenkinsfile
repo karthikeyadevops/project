@@ -3,7 +3,7 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                git 'https://github.com/karthikkasani09/projects.git'
+                git 'https://github.com/karthikkasani09/project.git'
                 script {
                     docker.build("nodejs-app:${env.BUILD_NUMBER}")
                 }
