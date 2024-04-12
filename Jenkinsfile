@@ -1,60 +1,46 @@
 pipeline {
     agent any
+
+    environment {
+        // Define environment variables
+        AWS_REGION = 'us-east-1'
+        ECR_REPO = 'public.ecr.aws/e9k0p2n3/jenkins'
+        DOCKER_IMAGE_TAG = "${env.BUILD_ID}"
+    }
+
     stages {
-        stage('Build') {
+        stage('Checkout') {
             steps {
                 git 'https://github.com/karthikkasani09/project.git'
+            }
+        }
+        
+        stage('Unit Tests') {
+            steps {
+                sh 'npm test' // Replace with your test command
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
                 script {
-                    docker.build("nodejs-app:${env.BUILD_NUMBER}")
+                    // Build Docker image and tag it with build version
+                    docker.build("${ECR_REPO}:${DOCKER_IMAGE_TAG}")
                 }
             }
         }
-        stage('Test') {
-            steps {
-                sh 'npm install' // Install dependencies
-                sh 'npm test'    // Run unit tests
-            }
-        }
-        stage('Push to ECR') {
+
+        stage('Push Docker Image to ECR') {
             steps {
                 script {
-                    docker.withRegistry('https://public.ecr.aws/e9k0p2n3/jenkins.dkr.ecr.us-east-1.amazonaws.com', 'ecr:jenkins') {
-                        docker.image("nodejs-app:${env.BUILD_NUMBER}").push("latest")
+                    // Push Docker image to AWS ECR
+                    withCredentials([awsEcr(credentialsId: 'AWS_IAM_ACCESS_KEY', region: "${AWS_REGION}")]) {
+                        docker.withRegistry("https://${533267398752}.dkr.ecr.${AWS_REGION}.amazonaws.com", 'ecr:us-east-1') {
+                            dockerImage.push()
+                        }
                     }
                 }
             }
         }
-        stage('Deploy to EC2') {
-            steps {
-                sh 'ssh -i ubuntu@54.81.87.125 "docker pull public.ecr.aws/e9k0p2n3/jenkins.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"'
-                sh 'ssh ubuntu@54.81.87.125 "docker run -d -p 80:3000 public.ecr.aws/e9k0p2n3/jenkins.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"'
-            }
-        }
-        stage('Security Configuration') {
-            steps {
-                sh 'ssh ubuntu@54.81.87.125 "sudo ufw allow 80"' // Allow HTTP traffic
-            }
-        }
-        stage('Validation') {
-            steps {
-                sh 'curl http://54.81,87.125' // Validate the deployed application
-            }
-            post {
-                success {
-                    echo 'Validation successful!'
-                }
-                failure {
-                    error 'Validation failed!'
-                }
-            }
-        }
-    }
-    post {
-        always {
-            emailext subject: 'CI/CD Pipeline Report',
-                     body: "Pipeline execution status: ${currentBuild.currentResult}",
-                     to: 'your-email@example.com'
-        }
     }
 }
-
